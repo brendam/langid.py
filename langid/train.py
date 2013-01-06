@@ -33,7 +33,7 @@ authors and should not be interpreted as representing official policies, either 
 or implied, of the copyright holder.
 """
 
-import base64, bz2, cPickle
+import base64, bz2, pickle
 import os, sys, optparse
 import array
 import numpy as np
@@ -45,7 +45,7 @@ from collections import deque, defaultdict
 from contextlib import closing
 
 class Scanner(object):
-  alphabet = map(chr, range(1<<8))
+  alphabet = list(map(chr, list(range(1<<8))))
   """
   Implementation of Aho-Corasick string matching.
   This class should be instantiated with a set of keywords, which
@@ -125,7 +125,7 @@ class Scanner(object):
     # is located at current state * alphabet size  + ord(c).
     # The choice of 'H' array typecode limits us to 64k states.
     def nextstate_iter():
-      for state in xrange(len(set(self.nextmove.values()))):
+      for state in range(len(set(self.nextmove.values()))):
         for letter in self.alphabet:
           yield self.nextmove[(state, letter)]
     self.nm_arr = array.array('H', nextstate_iter())
@@ -160,7 +160,7 @@ def chunk(seq, chunksize):
   """
   seq_iter = iter(seq)
   while True:
-    chunk = tuple(seq_iter.next() for i in range(chunksize))
+    chunk = tuple(next(seq_iter) for i in range(chunksize))
     if len(chunk) == 0:
       break
     yield chunk
@@ -295,7 +295,7 @@ def generate_cm(paths, langs):
     lang = os.path.basename(os.path.dirname(path))
     cm[docid, lang_index[lang]] = True
   nb_classes = sorted(lang_index, key=lang_index.get)
-  print "generated class map"
+  print("generated class map")
 
   return nb_classes, cm
 
@@ -340,19 +340,19 @@ def generate_ptc(paths, nb_features, tk_nextmove, state2feat, cm):
   pool.join()
 
   write_count = sum(pass1_out)
-  print "wrote a total of %d keys" % write_count
+  print("wrote a total of %d keys" % write_count)
 
-  f_chunk_sizes = map(len, feat_chunks)
+  f_chunk_sizes = list(map(len, feat_chunks))
   f_chunk_offsets = offsets(feat_chunks)
   with closing( mp.Pool(options.job_count, setup_pass2, (cm, offsets(path_chunks), num_instances)) 
               ) as pool:
-    pass2_out = pool.imap(pass2, zip(f_chunk_sizes, f_chunk_offsets, b_dirs))
+    pass2_out = pool.imap(pass2, list(zip(f_chunk_sizes, f_chunk_offsets, b_dirs)))
   pool.join()
 
-  reads, pass2_out = zip(*pass2_out)
+  reads, pass2_out = list(zip(*pass2_out))
   read_count = sum(reads)
 
-  print "read a total of %d keys (%d short)" % (read_count, write_count - read_count)
+  print("read a total of %d keys (%d short)" % (read_count, write_count - read_count))
   prod = np.vstack(pass2_out)
   ptc = np.log(1 + prod) - np.log(num_features + prod.sum(0))
 
@@ -362,22 +362,22 @@ def generate_ptc(paths, nb_features, tk_nextmove, state2feat, cm):
   return nb_ptc
 
 def read_corpus(path):
-  print "data directory: ", path
+  print("data directory: ", path)
   langs = set()
   paths = []
   for dirpath, dirnames, filenames in os.walk(path, followlinks=True):
     for f in filenames:
       paths.append(os.path.join(dirpath, f))
       langs.add(os.path.basename(dirpath))
-  print "found %d files" % len(paths)
-  print "langs(%d): %s" % (len(langs), sorted(langs))
+  print("found %d files" % len(paths))
+  print("langs(%d): %s" % (len(langs), sorted(langs)))
   return paths, langs
 
 def build_scanner(nb_features):
   feat_index = index(nb_features)
 
   # Build the actual scanner
-  print "building scanner"
+  print("building scanner")
   scanner = Scanner(nb_features)
   tk_nextmove, raw_output = scanner.__getstate__()
 
@@ -389,7 +389,7 @@ def build_scanner(nb_features):
   
   # Map the scanner raw output directly into feature indexes
   state2feat = {}
-  for k,v in raw_output.items():
+  for k,v in list(raw_output.items()):
     state2feat[k] = tuple(feat_index[f] for f in v)
   return tk_nextmove, tk_output, state2feat
 
@@ -405,7 +405,7 @@ if __name__ == "__main__":
   tempfile.tempdir = options.temp
 
   paths, langs = read_corpus(options.corpus)
-  nb_features = map(eval, open(options.infile))
+  nb_features = list(map(eval, open(options.infile)))
   nb_classes, cm = generate_cm(paths, langs)
   tk_nextmove, tk_output, state2feat = build_scanner(nb_features)
   nb_ptc = generate_ptc(paths, nb_features, tk_nextmove, state2feat, cm)
@@ -413,7 +413,7 @@ if __name__ == "__main__":
 
   # output the model
   model = nb_ptc, nb_pc, nb_classes, tk_nextmove, tk_output
-  string = base64.b64encode(bz2.compress(cPickle.dumps(model)))
+  string = base64.b64encode(bz2.compress(pickle.dumps(model)))
   with open(options.outfile, 'w') as f:
     f.write(string)
-  print "wrote model to %s (%d bytes)" % (options.outfile, len(string))
+  print("wrote model to %s (%d bytes)" % (options.outfile, len(string)))

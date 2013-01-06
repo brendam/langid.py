@@ -32,7 +32,7 @@ if __name__ == "__main__":
         if text:
           lang, conf = langid.classify(text)
           if lang_set is None or lang in lang_set:
-            print "{0}: {1}".format(lang, text.encode('utf8'))
+            print("{0}: {1}".format(lang, text.encode('utf8')))
   except (IOError, KeyboardInterrupt):
     # Terminate on broken pipe or ^C
     pass

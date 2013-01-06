@@ -49,10 +49,10 @@ import shutil
 import tempfile
 import marshal
 import numpy
-import cPickle
+import pickle
 import multiprocessing as mp
 import atexit
-from itertools import tee, imap
+from itertools import tee
 from collections import defaultdict
 from datetime import datetime
 from contextlib import closing
@@ -89,17 +89,17 @@ class Tokenizer(object):
   def __call__(self, seq):
     max_order = self.max_order
     t = tee(seq, max_order)
-    for i in xrange(max_order):
-      for j in xrange(i):
+    for i in range(max_order):
+      for j in range(i):
         # advance iterators, ignoring result
-        t[i].next()
+        next(t[i])
     while True:
-      token = tuple(tn.next() for tn in t)
+      token = tuple(next(tn) for tn in t)
       if len(token) < max_order: break
-      for n in xrange(max_order):
+      for n in range(max_order):
         yield token[:n+1]
-    for a in xrange(max_order-1):
-      for b in xrange(1, max_order-a):
+    for a in range(max_order-1):
+      for b in range(1, max_order-a):
         yield token[a:a+b]
 
 class Enumerator(object):
@@ -132,7 +132,7 @@ def chunk(seq, chunksize):
   """
   seq_iter = iter(seq)
   while True:
-    chunk = tuple(seq_iter.next() for i in range(chunksize))
+    chunk = tuple(next(seq_iter) for i in range(chunksize))
     if len(chunk) == 0:
       break
     yield chunk
@@ -164,7 +164,7 @@ def split_info(f_masks, class_map):
 
 def infogain(nonzero, class_map):
   if nonzero.dtype != bool:
-    raise TypeError, "expected a boolean feature map"
+    raise TypeError("expected a boolean feature map")
 
   # Feature map should be a boolean map
   num_inst, num_feat = nonzero.shape
@@ -245,7 +245,7 @@ def pass2(bucket):
           doc_count[key] += value
           count += 1
     
-    for item in doc_count.iteritems():
+    for item in doc_count.items():
       docfreq.write(marshal.dumps(item))
   return count
 
@@ -344,7 +344,7 @@ class ClassIndexer(object):
     return cm_domain, cm_lang
 
 def select_LD_features(features, lang_index, b_dirs, chunk_offsets, cm_domain, cm_lang, options):
-  print "computing information gain"
+  print("computing information gain")
   # Instead of receiving a single feature map, we now receive a list of paths,
   # each corresponding to a chunk containing a portion of the final feature set
   # for each of these chunks we need to compute the IG of each feature WRT to
@@ -368,7 +368,7 @@ def select_LD_features(features, lang_index, b_dirs, chunk_offsets, cm_domain, c
     w_lang.append(w_l)
     w_domain.append(w_d)
     terms.extend(t)
-    print "processed chunk (%d/%d) [%d terms]" % (i+1, num_chunk, len(t))
+    print("processed chunk (%d/%d) [%d terms]" % (i+1, num_chunk, len(t)))
   pool.join()
 
   w_lang = numpy.hstack(w_lang)
@@ -376,7 +376,7 @@ def select_LD_features(features, lang_index, b_dirs, chunk_offsets, cm_domain, c
   terms = ["".join(t) for t in terms]
 
   if options.weights:
-    write_weights(os.path.join(options.weights, 'domain'), zip(terms, w_domain))
+    write_weights(os.path.join(options.weights, 'domain'), list(zip(terms, w_domain)))
 
   # compile the final feature set
   final_feature_set = set()
@@ -387,8 +387,8 @@ def select_LD_features(features, lang_index, b_dirs, chunk_offsets, cm_domain, c
       final_feature_set.add(terms[t])
     if options.weights:
       path = os.path.join(options.weights, lang)
-      write_weights(path, zip(terms,lang_weights))
-      print '  output %s weights to: "%s"' % (lang, path)
+      write_weights(path, list(zip(terms,lang_weights)))
+      print('  output %s weights to: "%s"' % (lang, path))
 
   return final_feature_set
     
@@ -396,8 +396,8 @@ def select_LD_features(features, lang_index, b_dirs, chunk_offsets, cm_domain, c
 def get_classmaps(paths):
   indexer = ClassIndexer(paths)
   cm_domain, cm_lang = indexer.get_class_maps()
-  print "langs:", indexer.lang_index.keys()
-  print "domains:", indexer.domain_index.keys()
+  print("langs:", list(indexer.lang_index.keys()))
+  print("domains:", list(indexer.domain_index.keys()))
   return cm_domain, cm_lang, indexer.lang_index 
 
 def build_inverted_index(paths, options):
@@ -414,15 +414,15 @@ def build_inverted_index(paths, options):
 
   doc_count = defaultdict(int)
   total = len(paths)/chunk_size + (0 if len(paths)%chunk_size else 1)
-  print "chunk size: %d (%d chunks)" % (chunk_size, total)
+  print("chunk size: %d (%d chunks)" % (chunk_size, total))
 
   wrotekeys = 0
   for i, keycount in enumerate(pass1_out):
-    print "tokenized chunk (%d/%d) [%d keys]" % (i+1,total, keycount)
+    print("tokenized chunk (%d/%d) [%d keys]" % (i+1,total, keycount))
     wrotekeys += keycount
   pool.join()
 
-  print "wrote a total of %d keys" % wrotekeys 
+  print("wrote a total of %d keys" % wrotekeys) 
 
   # PASS 2: Compile document frequency counts
   with closing( mp.Pool(options.job_count) ) as pool:
@@ -431,10 +431,10 @@ def build_inverted_index(paths, options):
   readkeys = 0
   for i, keycount in enumerate(pass2_out):
     readkeys += keycount 
-    print "processed bucket (%d/%d) [%d keys]" % (i+1, options.buckets, keycount)
+    print("processed bucket (%d/%d) [%d keys]" % (i+1, options.buckets, keycount))
   pool.join()
 
-  print "read back a total of %d keys (%d short)" % ( readkeys, wrotekeys-readkeys)
+  print("read back a total of %d keys (%d short)" % ( readkeys, wrotekeys-readkeys))
 
   # build the global term->df mapping
   doc_count = {}
@@ -442,7 +442,7 @@ def build_inverted_index(paths, options):
     for key, value in unmarshal_iter(os.path.join(bucket, 'docfreq')):
       doc_count[key] = value
 
-  print "unique features:", len(doc_count)
+  print("unique features:", len(doc_count))
 
   # Work out the set of features to compute IG
   features = set()
@@ -450,7 +450,7 @@ def build_inverted_index(paths, options):
     d = dict( (k, doc_count[k]) for k in doc_count if len(k) == i)
     features |= set(sorted(d, key=d.get, reverse=True)[:options.df_tokens])
   features = sorted(features)
-  print "candidate features: ", len(features)
+  print("candidate features: ", len(features))
 
   # Work out the path chunk start offsets
   chunk_offsets = [0]
@@ -496,19 +496,19 @@ if __name__ == "__main__":
   tempfile.tempdir = options.temp
 
   # display paths
-  print "output path:", output_path
-  print "temp path:", options.temp
+  print("output path:", output_path)
+  print("temp path:", options.temp)
   if options.corpus:
-    print "corpus path:", options.corpus
+    print("corpus path:", options.corpus)
   if options.weights:
-    print "weights path:", options.weights
+    print("weights path:", options.weights)
 
   # build a list of paths
   paths = []
   for dirpath, dirnames, filenames in os.walk(options.corpus, followlinks=True):
     for f in filenames:
       paths.append(os.path.join(dirpath, f))
-  print "will tokenize %d files" % len(paths)
+  print("will tokenize %d files" % len(paths))
 
   # Tokenize
   cm_domain, cm_lang, lang_index = get_classmaps(paths)
@@ -520,16 +520,16 @@ if __name__ == "__main__":
   # Compute LD from inverted index
   try:
     final_feature_set = select_LD_features(features, lang_index, b_dirs, chunk_offsets, cm_domain, cm_lang, options)
-  except OSError, e:
-    print e
+  except OSError as e:
+    print(e)
     import pdb;pdb.pm()
  
   # Output
-  print "selected %d features" % len(final_feature_set)
+  print("selected %d features" % len(final_feature_set))
 
   with open(output_path,'w') as f:
     for feat in final_feature_set:
-      print >>f, repr(feat)
-    print 'wrote features to "%s"' % output_path 
+      print(repr(feat), file=f)
+    print('wrote features to "%s"' % output_path) 
     
 
