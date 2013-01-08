@@ -69,7 +69,7 @@ def tokenize(text, arr):
   Tokenize text into a feature vector stored in arr.
   """
   # Convert the text to a sequence of ascii values
-  ords = list(map(ord, text))
+  ords = list(map(ord, text.decode('ISO-8859-1')))
 
   # Count the number of times we enter each state
   state = 0
